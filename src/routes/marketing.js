@@ -8,6 +8,7 @@ const { page, abs } = require('../views/layout');
 const db = require('../db');
 const { esc, formatNumber, faDigits, enDigits, rateLimiter, clientIp } = require('../util');
 const demo = require('../demoBot');
+const { markPlaceholders } = require('../views/helpers');
 
 const router = express.Router();
 
@@ -398,7 +399,7 @@ router.get('/faq-templates/:slug', (req, res, next) => {
   <textarea id="faq-plain" class="hide" readonly>${esc(plain)}</textarea>
 </div></div>
 <section class="section" style="padding-top:16px"><div class="container narrow">
-  <div class="faq">${ind.starterFaqs.map(f => `<details open><summary>${esc(f.question)}</summary><p>${esc(f.answer)}</p></details>`).join('')}</div>
+  <div class="faq">${ind.starterFaqs.map(f => `<details open><summary>${esc(f.question)}</summary><p>${markPlaceholders(f.answer)}</p></details>`).join('')}</div>
   <div class="prose" style="margin-top:32px">
     <h2>چند نکته برای صفحه‌ی سؤالات متداول ${esc(ind.name)}</h2>
     <ul>
