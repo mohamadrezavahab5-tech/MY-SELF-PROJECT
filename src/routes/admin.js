@@ -37,6 +37,7 @@ router.get('/admin', (req, res) => {
   `).all(SYSTEM_PHONE);
   const orders = conn.prepare(`SELECT o.*, u.name, u.company, u.phone FROM orders o JOIN users u ON u.id = o.user_id WHERE o.status = 'paid' ORDER BY o.id DESC LIMIT 30`).all();
   const payouts = conn.prepare(`SELECT p.*, u.name, u.phone FROM payouts p JOIN users u ON u.id = p.user_id ORDER BY p.status != 'requested', p.id DESC LIMIT 50`).all();
+  const enquiries = conn.prepare(`SELECT * FROM contact_requests ORDER BY status != 'new', id DESC LIMIT 50`).all();
 
   render(req, res, 'مدیریت سایت', `<div class="page-title"><h1>مدیریت سایت</h1></div>
 ${req.query.ok ? '<div class="flash">انجام شد.</div>' : ''}
@@ -47,6 +48,12 @@ ${req.query.ok ? '<div class="flash">انجام شد.</div>' : ''}
   <div class="stat"><div class="n">${formatNumber(msgs30)}</div><div class="l">سؤال پاسخ‌داده‌شده ۳۰ روز</div></div>
 </div>
 <p class="muted">کل درآمد: ${formatToman(revAll)} · بدهی تسویه‌ی همکاران: ${formatToman(owed)}</p>
+
+<div class="panel"><h2>درخواست‌های نسخه‌ی سازمانی</h2>
+${enquiries.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>نام / سازمان</th><th>تماس</th><th>توضیح</th><th>تاریخ</th><th></th></tr></thead><tbody>
+${enquiries.map(e => `<tr${e.status === 'done' ? ' style="opacity:.55"' : ''}><td>${esc(e.name)}<br><span class="muted">${esc(e.org)}</span></td><td class="ltr"><a href="tel:${esc(e.phone)}">${esc(e.phone)}</a></td><td>${esc(e.message)}</td><td>${esc(faDateTime(e.created_at))}</td>
+<td>${e.status === 'new' ? `<form method="post" action="/admin/enquiries/${e.id}/done"><button class="btn btn-sm btn-outline">پیگیری شد ✓</button></form>` : '<span class="badge ok">پیگیری شد</span>'}</td></tr>`).join('')}
+</tbody></table></div>` : '<p class="muted">درخواستی نیست.</p>'}</div>
 
 <div class="panel"><h2>درخواست‌های تسویه</h2>
 ${payouts.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>همکار</th><th>مبلغ</th><th>شبا</th><th>تاریخ</th><th></th></tr></thead><tbody>
@@ -84,6 +91,11 @@ router.post('/admin/users/:id/reset', form, (req, res) => {
 <p class="code-box" style="font-size:1.4rem">${esc(temp)}</p>
 <p class="muted">این رمز فقط همین یک بار نمایش داده می‌شود. آن را به کاربر بگویید.</p>
 <a class="btn btn-outline" href="/admin">بازگشت</a></div>`);
+});
+
+router.post('/admin/enquiries/:id/done', form, (req, res) => {
+  db.get().prepare(`UPDATE contact_requests SET status = 'done' WHERE id = ?`).run(Number(req.params.id));
+  res.redirect('/admin?ok=1');
 });
 
 router.post('/admin/payouts/:id', form, (req, res) => {

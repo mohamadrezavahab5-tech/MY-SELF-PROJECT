@@ -10,6 +10,7 @@ const config = require('../config');
 const content = require('../content');
 const channels = require('../channels');
 const engine = require('../nlp/engine');
+const importer = require('../importer');
 const { effectivePlan, PLANS } = require('../plans');
 const { dashPage } = require('../views/layout');
 const { faDateTime, ago, markPlaceholders, hasPlaceholder, TYPE_BADGE } = require('../views/helpers');
@@ -92,7 +93,10 @@ function newBotForm(req, { title, intro }) {
     <div class="field"><span class="label">حوزه‌ی کاری</span>
       <div class="industry-pick">${opts}<label><input type="radio" name="industry" value=""${pre ? '' : ' checked'}> <span>✳️ سایر</span></label></div>
     </div>
-    <label class="check"><input type="checkbox" name="starter" value="1" checked> سؤال و جواب‌های آماده‌ی این حوزه را اضافه کن (بعداً ویرایششان می‌کنید)</label>
+    <div class="field"><label for="faq-url">آدرس صفحه‌ی «سؤالات متداول» سایت‌تان <span class="hint">(اختیاری)</span></label>
+      <input id="faq-url" name="url" type="url" class="ltr" placeholder="https://example.ir/faq">
+      <span class="hint">اگر سایت‌تان صفحه‌ی سؤالات متداول دارد، آدرسش را بدهید تا همه‌ی سؤال و جواب‌ها خودکار وارد بات شوند.</span></div>
+    <label class="check"><input type="checkbox" name="starter" value="1" checked> سؤال و جواب‌های آماده‌ی این حوزه را هم اضافه کن (بعداً ویرایششان می‌کنید)</label>
     <div><button class="btn btn-primary btn-lg">ساخت بات</button></div>
   </form>
 </div>`;
@@ -118,17 +122,54 @@ router.get('/app/bots/new', (req, res) => {
   render(req, res, { title: 'بات جدید', active: 'newbot', body: newBotForm(req, { title: 'بات جدید', intro: 'برای یک سایت، شعبه یا بخش دیگر، یک بات جداگانه بسازید.' }) });
 });
 
-router.post('/app/bots/new', form, (req, res) => {
+router.post('/app/bots/new', form, async (req, res) => {
   const plan = effectivePlan(req.user);
   if (userBots(req.user).length >= plan.bots) return res.redirect('/app/bots/new');
   const name = String(req.body.name || '').trim().slice(0, 60) || req.user.company || 'بات من';
   const industry = content.industryById(String(req.body.industry || ''));
   const bot = bots.createBot(req.user.id, { name, industry: industry ? industry.id : '' });
+  // The customer's own FAQ page goes in first: it beats generic starter answers.
+  let fromSite = 0;
+  let siteError = '';
+  if (String(req.body.url || '').trim()) {
+    const r = await importFromSite(req, bot, req.body.url);
+    fromSite = r.n;
+    siteError = r.error;
+  }
   let imported = 0;
   if (industry && req.body.starter) imported = importStarter(bot, industry, plan);
   const next = safeNext(req.body.next, '');
   if (next) return res.redirect(next);
-  res.redirect(botUrl(bot, `/faqs?ok=created${imported ? '&starter=1' : ''}`));
+  const q = siteError ? `&err=${encodeURIComponent(siteError)}` : (fromSite ? `&site=${fromSite}` : '');
+  res.redirect(botUrl(bot, `/faqs?ok=created${imported ? '&starter=1' : ''}${q}`));
+});
+
+const IMPORT_ERRORS = {
+  bad_url: 'آدرس وارد‌شده معتبر نیست.',
+  blocked_address: 'این آدرس قابل دسترسی نیست.',
+  timeout: 'سایت دیر جواب داد. دوباره امتحان کنید.',
+  not_html: 'این آدرس یک صفحه‌ی وب نیست.',
+  too_large: 'صفحه خیلی بزرگ است.',
+  empty: 'در این صفحه سؤال و جوابی پیدا نشد. مطمئن شوید آدرس صفحه‌ی «سؤالات متداول» را داده‌اید.',
+};
+
+async function importFromSite(req, bot, url) {
+  try {
+    const list = await importer.importFromUrl(url);
+    if (!list.length) return { n: 0, error: IMPORT_ERRORS.empty };
+    const room = Math.max(0, effectivePlan(req.user).faqs - faqCount(bot.id));
+    const take = list.slice(0, room);
+    db.get().transaction(() => { for (const f of take) bots.addFaq(bot.id, f); })();
+    return { n: take.length, error: '' };
+  } catch (e) {
+    return { n: 0, error: IMPORT_ERRORS[e.message] || `صفحه باز نشد (${String(e.code || e.message).slice(0, 40)}). آدرس را بررسی کنید.` };
+  }
+}
+
+router.post('/app/bots/:botId/faqs/import-url', form, async (req, res) => {
+  const r = await importFromSite(req, req.bot, req.body.url);
+  if (r.error) return res.redirect(botUrl(req.bot, `/faqs?err=${encodeURIComponent(r.error)}#import`));
+  res.redirect(botUrl(req.bot, `/faqs?ok=imported&n=${r.n}`));
 });
 
 function importStarter(bot, industry, plan) {
@@ -237,6 +278,8 @@ router.get('/app/bots/:botId/faqs', (req, res) => {
     title: 'سؤال و جواب‌ها', bot, active: 'faqs',
     body: `<div class="page-title"><h1>سؤال و جواب‌ها <span class="badge primary">${faDigits(total)} از ${formatNumber(plan.faqs)}</span></h1>
   <div class="row"><a class="btn btn-ghost btn-sm" href="#import">ورود گروهی</a><a class="btn btn-ghost btn-sm" href="${botUrl(bot, '/faqs/export.xlsx')}">خروجی اکسل</a></div></div>
+${req.query.err ? `<div class="error" style="margin-bottom:16px">${esc(req.query.err)}</div>` : ''}
+${req.query.site ? `<div class="success" style="margin-bottom:16px">${faDigits(Number(req.query.site) || 0)} سؤال و جواب از سایت شما وارد شد. ✅</div>` : ''}
 ${req.query.starter ? `<div class="notice" style="margin-bottom:16px">سؤال‌های آماده اضافه شدند. جاهای <mark class="placeholder-mark">[داخل کروشه]</mark> را با اطلاعات کسب‌وکارتان پر کنید و سؤال‌هایی را که به کارتان نمی‌آید حذف کنید.</div>` : ''}
 ${needEdit && filter !== 'placeholders' ? `<div class="notice" style="margin-bottom:16px">${faDigits(needEdit)} جواب هنوز جای خالی دارد. <a href="?filter=placeholders">نمایش همین‌ها</a></div>` : ''}
 <details class="panel add-faq"${total && !req.query.question ? '' : ' open'}>
@@ -253,6 +296,11 @@ ${needEdit && filter !== 'placeholders' ? `<div class="notice" style="margin-bot
 ${rows.length ? rows.map(f => faqItem(bot, f)).join('') : `<div class="empty"><div class="big">📝</div><p>${q || filter ? 'موردی پیدا نشد.' : 'هنوز سؤالی اضافه نکرده‌اید.'}</p></div>`}
 <div class="panel" id="import" style="margin-top:24px">
   <h2>ورود گروهی</h2>
+  <form class="form" method="post" action="${botUrl(bot, '/faqs/import-url')}" style="margin-bottom:18px">
+    <div class="field"><label for="imp-url">⚡ از روی سایت خودتان</label>
+      <div class="row"><input id="imp-url" type="url" name="url" class="ltr" required placeholder="https://example.ir/faq" style="flex:1;min-width:220px"><button class="btn btn-primary btn-sm">وارد کن</button></div>
+      <span class="hint">آدرس صفحه‌ی «سؤالات متداول» سایت‌تان را بدهید. سؤال و جواب‌ها خودکار پیدا و وارد می‌شوند.</span></div>
+  </form>
   ${industry || content.industries.length ? `<form class="row" method="post" action="${botUrl(bot, '/faqs/starter')}" style="margin-bottom:16px">
     <label class="label" for="starter-ind">بسته‌ی آماده:</label>
     <select id="starter-ind" name="industry" style="max-width:260px">${content.industries.map(i => `<option value="${esc(i.id)}"${industry && industry.id === i.id ? ' selected' : ''}>${esc(i.icon)} ${esc(i.name)} (${faDigits(i.starterFaqs.length)} سؤال)</option>`).join('')}</select>

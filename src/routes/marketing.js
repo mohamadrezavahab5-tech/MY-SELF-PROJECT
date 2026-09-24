@@ -5,7 +5,8 @@ const config = require('../config');
 const content = require('../content');
 const { PLANS, DURATIONS, priceToman } = require('../plans');
 const { page, abs } = require('../views/layout');
-const { esc, formatNumber, faDigits } = require('../util');
+const db = require('../db');
+const { esc, formatNumber, faDigits, enDigits, rateLimiter, clientIp } = require('../util');
 const demo = require('../demoBot');
 
 const router = express.Router();
@@ -110,7 +111,7 @@ router.get('/', (req, res) => {
   <div class="container">
     <div class="section-head"><h2>سه قدم تا پشتیبانی خودکار</h2><p>بدون قرارداد، بدون نصب نرم‌افزار و بدون نیاز به تیم فنی.</p></div>
     <div class="grid grid-3 steps">
-      <div class="card step"><h3>سؤال و جواب‌ها را وارد کنید</h3><p>از بسته‌ی آماده‌ی صنف خودتان شروع کنید، فایل اکسل بدهید یا خودتان بنویسید.</p></div>
+      <div class="card step"><h3>سؤال و جواب‌ها را وارد کنید</h3><p>آدرس صفحه‌ی «سؤالات متداول» سایت‌تان را بدهید تا خودکار وارد شود. یا از بسته‌ی آماده‌ی صنف‌تان، فایل اکسل یا نوشتن دستی شروع کنید.</p></div>
       <div class="card step"><h3>یک خط کد در سایت بگذارید</h3><p>روی وردپرس، سایت اختصاصی یا هر سایتی کار می‌کند. لینک اختصاصی و ربات بله هم دارد.</p></div>
       <div class="card step"><h3>بات هر روز بهتر می‌شود</h3><p>سؤال‌هایی که جوابشان نبوده برایتان جمع می‌شود. جواب بدهید تا دفعه‌ی بعد خودش جواب بدهد.</p></div>
     </div>
@@ -140,6 +141,23 @@ ${inds.length ? `<section class="section">
     <p class="center" style="margin-top:22px"><a href="/industries">همه‌ی کاربردها ←</a></p>
   </div>
 </section>` : ''}
+
+<section class="section section-soft">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">🏛️ برای سازمان‌ها و ادارات</span>
+      <h2>نسخه‌ی اختصاصی، روی سرور خود سازمان</h2>
+      <p class="lead">اطلاعات سازمان‌تان نباید به سرویس‌های بیرونی برود؟ ${esc(config.siteName)} را روی سرور خودتان نصب می‌کنیم. بات فقط جواب‌های رسمی و تأییدشده‌ی سازمان را می‌دهد و از خودش حرفی نمی‌سازد.</p>
+      <div class="hero-cta"><a class="btn btn-primary" href="/enterprise">درخواست مشاوره و دمو</a></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div class="feature-icon">🔒</div><h3>داده نزد خودتان</h3><p>بدون ارسال هیچ اطلاعاتی به بیرون از سازمان.</p></div>
+      <div class="card"><div class="feature-icon">✅</div><h3>فقط جواب رسمی</h3><p>بدون جواب ساختگی. برای ادارات، بانک و بیمه حیاتی است.</p></div>
+      <div class="card"><div class="feature-icon">💬</div><h3>اتصال به بله</h3><p>پاسخ‌گویی به شهروندان در پیام‌رسان داخلی.</p></div>
+      <div class="card"><div class="feature-icon">🏢</div><h3>چند واحد، چند بات</h3><p>برای هر واحد یا شعبه یک بات جداگانه.</p></div>
+    </div>
+  </div>
+</section>
 
 ${pricingCards()}
 ${faqSection(content.siteFaq)}
@@ -196,6 +214,10 @@ function pricingCards() {
       <div class="pricing-toggle" role="radiogroup" aria-label="مدت اشتراک">${durInputs}</div>
     </div>
     <div class="grid grid-3">${cards}</div>
+    <div class="card row-between" style="margin-top:20px">
+      <div><h3 style="margin:0">🏛️ نسخه‌ی اختصاصی سازمانی (نصب روی سرور شما)</h3><p class="muted" style="margin:0">برای ادارات، بانک‌ها، بیمه‌ها و مراکز درمانی. داده‌ها فقط نزد خودتان.</p></div>
+      <a class="btn btn-outline" href="/enterprise">تماس با فروش</a>
+    </div>
   </div>
 </section>
 <script>
@@ -336,6 +358,131 @@ ${ctaBand('از همین امروز درآمد داشته باشید', 'ثبت�
   }));
 });
 
+// ---- FAQ templates: free, copyable FAQ lists per industry. They target
+// searches like «نمونه سوالات متداول فروشگاه اینترنتی» made by exactly the
+// people who need this product, and funnel them into the importer.
+
+function templateSlug(ind) {
+  return ind.seo.slug.replace(/^chatbot-/, '');
+}
+
+function templateBySlug(slug) {
+  return content.industries.find(i => templateSlug(i) === slug) || null;
+}
+
+router.get('/faq-templates', (req, res) => {
+  res.send(page({
+    title: `نمونه سؤالات متداول آماده برای سایت | ${config.siteName}`,
+    description: `نمونه سؤالات متداول (FAQ) آماده برای ${faDigits(content.industries.length)} صنف: فروشگاه اینترنتی، کلینیک، آموزشگاه، رستوران، هتل و… با جواب نمونه، رایگان و قابل کپی.`,
+    path: '/faq-templates',
+    user: req.user,
+    body: `<div class="page-head"><div class="container center"><h1>نمونه سؤالات متداول آماده برای سایت</h1><p class="muted">سؤال‌های پرتکرار مشتری‌ها در هر صنف، با جواب نمونه. رایگان کپی کنید و در سایت‌تان بگذارید.</p></div></div>
+<section class="section" style="padding-top:20px"><div class="container"><div class="grid grid-3">
+${content.industries.map(i => `<a class="card industry-card" href="/faq-templates/${esc(templateSlug(i))}"><span class="emoji">${esc(i.icon)}</span><h3>سؤالات متداول ${esc(i.name)}</h3><span class="muted">${faDigits(i.starterFaqs.length)} سؤال و جواب آماده</span></a>`).join('')}
+</div></div></section>${ctaBand('سؤال‌ها را به چت‌بات تبدیل کنید', 'به‌جای این‌که مشتری صفحه‌ی سؤالات را بگردد، چت‌بات در همان لحظه جوابش را بدهد.')}`,
+    jsonLd: breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'نمونه سؤالات متداول', path: '/faq-templates' }]),
+  }));
+});
+
+router.get('/faq-templates/:slug', (req, res, next) => {
+  const ind = templateBySlug(req.params.slug);
+  if (!ind) return next();
+  const n = ind.starterFaqs.length;
+  const plain = ind.starterFaqs.map(f => `سؤال: ${f.question}\nجواب: ${f.answer}`).join('\n\n');
+  const others = content.industries.filter(i => i.id !== ind.id).slice(0, 6);
+  const body = `<div class="page-head"><div class="container narrow">
+  <nav class="breadcrumbs"><a href="/">خانه</a> / <a href="/faq-templates">نمونه سؤالات متداول</a> / ${esc(ind.name)}</nav>
+  <h1>نمونه سؤالات متداول ${esc(ind.name)}</h1>
+  <p class="lead muted">${faDigits(n)} سؤال پرتکرار مشتری‌های ${esc(ind.name)} با جواب نمونه. جاهای <mark class="placeholder-mark">[داخل کروشه]</mark> را با اطلاعات خودتان پر کنید و در صفحه‌ی «سؤالات متداول» سایت‌تان بگذارید.</p>
+  <div class="row"><button type="button" class="btn btn-outline" data-copy="#faq-plain">📋 کپی همه‌ی سؤال‌ها</button><a class="btn btn-primary" href="/signup?industry=${esc(ind.id)}">تبدیل به چت‌بات (رایگان)</a></div>
+  <textarea id="faq-plain" class="hide" readonly>${esc(plain)}</textarea>
+</div></div>
+<section class="section" style="padding-top:16px"><div class="container narrow">
+  <div class="faq">${ind.starterFaqs.map(f => `<details open><summary>${esc(f.question)}</summary><p>${esc(f.answer)}</p></details>`).join('')}</div>
+  <div class="prose" style="margin-top:32px">
+    <h2>چند نکته برای صفحه‌ی سؤالات متداول ${esc(ind.name)}</h2>
+    <ul>
+      <li>سؤال‌ها را همان‌طور بنویسید که مشتری می‌پرسد، نه با زبان اداری.</li>
+      <li>جواب‌ها کوتاه و دقیق باشند: عدد، ساعت، قیمت و آدرس را دقیق بنویسید.</li>
+      <li>هر وقت قیمت یا شرایط عوض شد، این صفحه را هم به‌روز کنید؛ جواب قدیمی از جواب نداشتن بدتر است.</li>
+      <li>سؤال‌هایی را که پشتیبانی شما بیشتر از همه جواب می‌دهد، بالای صفحه بگذارید.</li>
+    </ul>
+    <h2>یک قدم جلوتر: جواب فوری، بدون این‌که مشتری بگردد</h2>
+    <p>بیشتر مشتری‌ها صفحه‌ی سؤالات متداول را نمی‌خوانند و مستقیم پیام می‌دهند یا زنگ می‌زنند. با ${esc(config.siteName)} همین سؤال‌ها به یک چت‌بات تبدیل می‌شوند که ۲۴ ساعته، در سایت و ربات بله، به همان شکلی که مشتری می‌پرسد جواب می‌دهد. اگر سایت‌تان صفحه‌ی سؤالات متداول دارد، فقط آدرسش را بدهید تا بات خودکار ساخته شود.</p>
+    <p><a class="btn btn-primary" href="/signup?industry=${esc(ind.id)}">ساخت چت‌بات ${esc(ind.name)}</a> <a class="btn btn-ghost" href="/industries/${esc(ind.seo.slug)}">درباره‌ی چت‌بات ${esc(ind.name)}</a></p>
+  </div>
+</div></section>
+<section class="section section-soft"><div class="container"><h2 class="center">نمونه سؤالات متداول صنف‌های دیگر</h2><div class="grid grid-3">
+${others.map(i => `<a class="card industry-card" href="/faq-templates/${esc(templateSlug(i))}"><span class="emoji">${esc(i.icon)}</span><strong>سؤالات متداول ${esc(i.name)}</strong></a>`).join('')}
+</div></div></section>
+<script src="/js/dash.js" defer></script>`;
+  res.send(page({
+    title: `نمونه سؤالات متداول ${ind.name} | ${faDigits(n)} سؤال آماده برای سایت`,
+    description: `${faDigits(n)} نمونه سؤال متداول برای سایت ${ind.name} با جواب آماده. رایگان کپی کنید، جاهای خالی را پر کنید و در صفحه‌ی FAQ سایت‌تان بگذارید.`,
+    path: `/faq-templates/${templateSlug(ind)}`,
+    user: req.user,
+    body,
+    jsonLd: breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'نمونه سؤالات متداول', path: '/faq-templates' }, { name: ind.name, path: `/faq-templates/${templateSlug(ind)}` }]),
+  }));
+});
+
+// ---- Enterprise / on-premise: the high-ticket offer for organizations.
+
+const contactLimit = rateLimiter({ windowMs: 60 * 60_000, max: 5 });
+
+function enterprisePage(req, { error = '', sent = false, values = {} } = {}) {
+  return page({
+    title: `چت‌بات سازمانی با نصب روی سرور سازمان | ${config.siteName}`,
+    description: 'چت‌بات پاسخگوی فارسی برای سازمان‌ها، ادارات، بانک‌ها، بیمه‌ها و بیمارستان‌ها: نصب روی سرور خود سازمان، بدون ارسال داده به بیرون، اتصال به بله.',
+    path: '/enterprise',
+    user: req.user,
+    body: `<section class="hero"><div class="container hero-grid">
+  <div>
+    <span class="eyebrow">🏛️ نسخه‌ی سازمانی</span>
+    <h1>چت‌بات پاسخگو <span class="grad">روی سرور خود سازمان</span></h1>
+    <p class="lead">برای ادارات، بانک‌ها، بیمه‌ها، دانشگاه‌ها و مراکز درمانی که اطلاعاتشان نباید از سازمان بیرون برود. ${esc(config.siteName)} روی سرور شما نصب می‌شود و بدون نیاز به اینترنت خارجی یا سرویس هوش مصنوعی بیرونی کار می‌کند.</p>
+    <ul class="feature-list">
+      <li>داده‌ها و گفتگوها فقط روی سرور خودتان</li>
+      <li>فقط جواب‌های تأییدشده‌ی سازمان؛ هیچ جواب ساختگی و غیررسمی</li>
+      <li>اتصال به ربات بله برای پاسخ‌گویی به شهروندان و مشتریان</li>
+      <li>بات‌های جداگانه برای هر واحد یا شعبه</li>
+      <li>راه‌اندازی، آموزش و پشتیبانی اختصاصی</li>
+    </ul>
+  </div>
+  <div class="card" id="contact">
+    <h2>درخواست مشاوره و دمو</h2>
+    ${sent ? '<div class="success">درخواست شما ثبت شد. همکاران ما در اولین روز کاری با شما تماس می‌گیرند. 🙏</div>' : `
+    ${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}
+    <form class="form" method="post" action="/enterprise#contact">
+      <div class="field"><label for="e-name">نام و نام خانوادگی</label><input id="e-name" name="name" type="text" required maxlength="80" value="${esc(values.name || '')}"></div>
+      <div class="field"><label for="e-org">سازمان / شرکت</label><input id="e-org" name="org" type="text" required maxlength="120" value="${esc(values.org || '')}"></div>
+      <div class="field"><label for="e-phone">شماره تماس</label><input id="e-phone" name="phone" type="tel" class="ltr" required maxlength="20" value="${esc(values.phone || '')}"></div>
+      <div class="field"><label for="e-msg">توضیح کوتاه (اختیاری)</label><textarea id="e-msg" name="message" maxlength="1000" rows="3">${esc(values.message || '')}</textarea></div>
+      <button class="btn btn-primary btn-block">ثبت درخواست</button>
+    </form>`}
+  </div>
+</div></section>
+${ctaBand('اول نسخه‌ی آنلاین را امتحان کنید', 'قبل از جلسه، می‌توانید در چند دقیقه یک بات رایگان بسازید و روی سؤال‌های واقعی سازمان‌تان تستش کنید.')}`,
+  });
+}
+
+router.get('/enterprise', (req, res) => res.send(enterprisePage(req)));
+
+router.post('/enterprise', express.urlencoded({ extended: false, limit: '8kb' }), (req, res) => {
+  const values = {
+    name: String(req.body.name || '').trim().slice(0, 80),
+    org: String(req.body.org || '').trim().slice(0, 120),
+    phone: String(req.body.phone || '').trim().slice(0, 20),
+    message: String(req.body.message || '').trim().slice(0, 1000),
+  };
+  if (!contactLimit(clientIp(req))) return res.status(429).send(enterprisePage(req, { error: 'درخواست‌های زیادی ثبت شد. کمی بعد دوباره امتحان کنید.', values }));
+  if (!values.name || !values.org) return res.status(400).send(enterprisePage(req, { error: 'نام و نام سازمان را وارد کنید.', values }));
+  if (!/^[0-9+\-\s۰-۹]{8,20}$/.test(values.phone)) return res.status(400).send(enterprisePage(req, { error: 'شماره تماس معتبر نیست.', values }));
+  db.get().prepare('INSERT INTO contact_requests (name, org, phone, message, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(values.name, values.org, enDigits(values.phone), values.message, Date.now());
+  res.send(enterprisePage(req, { sent: true }));
+});
+
 function staticPage(key, pathName) {
   router.get(pathName, (req, res, next) => {
     const p = content.pages[key];
@@ -376,6 +523,9 @@ router.get('/sitemap.xml', (req, res) => {
     ...content.industries.map(i => ({ loc: `/industries/${i.seo.slug}`, priority: '0.8', lastmod: today })),
     { loc: '/blog', priority: '0.7', lastmod: today },
     ...content.blog.map(p => ({ loc: `/blog/${p.slug}`, priority: '0.7', lastmod: p.date })),
+    { loc: '/faq-templates', priority: '0.8', lastmod: today },
+    ...content.industries.map(i => ({ loc: `/faq-templates/${templateSlug(i)}`, priority: '0.8', lastmod: today })),
+    { loc: '/enterprise', priority: '0.7', lastmod: today },
     { loc: '/affiliate', priority: '0.6', lastmod: today },
     ...['about', 'terms', 'privacy'].filter(k => content.pages[k]).map(k => ({ loc: `/${k}`, priority: '0.3', lastmod: today })),
   ];

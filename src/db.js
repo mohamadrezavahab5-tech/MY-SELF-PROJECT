@@ -195,6 +195,19 @@ const MIGRATIONS = [
     paid_at INTEGER
   );
   `,
+  `
+  -- Sales enquiries (on-premise / enterprise) from the public site.
+  CREATE TABLE contact_requests (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'enterprise',
+    name TEXT NOT NULL,
+    org TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'new',          -- new | done
+    created_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 function open(file) {

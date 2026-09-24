@@ -87,11 +87,11 @@ function footer() {
     </div>
     <div>
       <h3>محصول</h3>
-      <ul><li><a href="/pricing">قیمت‌ها</a></li><li><a href="/industries">کاربردها</a></li><li><a href="/signup">ساخت چت‌بات رایگان</a></li><li><a href="/affiliate">همکاری در فروش</a></li></ul>
+      <ul><li><a href="/pricing">قیمت‌ها</a></li><li><a href="/industries">کاربردها</a></li><li><a href="/enterprise">نسخه‌ی سازمانی</a></li><li><a href="/signup">ساخت چت‌بات رایگان</a></li><li><a href="/affiliate">همکاری در فروش</a></li></ul>
     </div>
     <div>
       <h3>منابع</h3>
-      <ul><li><a href="/blog">مجله</a></li><li><a href="/about">درباره ما</a></li><li><a href="/terms">قوانین</a></li><li><a href="/privacy">حریم خصوصی</a></li></ul>
+      <ul><li><a href="/blog">مجله</a></li><li><a href="/faq-templates">نمونه سؤالات متداول</a></li><li><a href="/about">درباره ما</a></li><li><a href="/terms">قوانین</a></li><li><a href="/privacy">حریم خصوصی</a></li></ul>
     </div>
     <div>
       <h3>تماس</h3>

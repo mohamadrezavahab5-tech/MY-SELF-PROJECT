@@ -327,3 +327,37 @@ test('admin can issue a temporary password', async () => {
   assert.strictEqual((await client().req('/login', { method: 'POST', form: { phone: '09121000016', password: 'password123' } })).status, 400);
   assert.strictEqual((await client().req('/login', { method: 'POST', form: { phone: '09121000016', password: temp } })).status, 302);
 });
+
+test('FAQ template and enterprise pages; enquiries reach the admin', async () => {
+  const c = client();
+  let res = await c.req('/faq-templates');
+  assert.strictEqual(res.status, 200);
+  res = await c.req('/faq-templates/online-shop');
+  assert.strictEqual(res.status, 200);
+  assert.match(await res.text(), /نمونه سؤالات متداول/);
+  const sm = await (await c.req('/sitemap.xml')).text();
+  assert.match(sm, /\/faq-templates\/online-shop/);
+  assert.match(sm, /\/enterprise/);
+
+  res = await c.req('/enterprise', { method: 'POST', form: { name: 'رضا', org: 'اداره نمونه', phone: '۰۲۱۸۸۸۸۸۸۸۸', message: '<b>x</b>' } });
+  assert.strictEqual(res.status, 200);
+  assert.match(await res.text(), /درخواست شما ثبت شد/);
+  const row = db.get().prepare('SELECT * FROM contact_requests ORDER BY id DESC').get();
+  assert.strictEqual(row.phone, '02188888888');
+
+  const admin = client();
+  await admin.req('/login', { method: 'POST', form: { phone: '09350000000', password: 'password123' } });
+  const html = await (await admin.req('/admin')).text();
+  assert.match(html, /اداره نمونه/);
+  assert.ok(!html.includes('<b>x</b>'));
+});
+
+test('importing from an internal URL is refused with a friendly error', async () => {
+  const c = client();
+  await signup(c, '09121000017');
+  const bot = await makeBot(c);
+  const res = await c.req(`/app/bots/${bot.id}/faqs/import-url`, { method: 'POST', form: { url: 'http://127.0.0.1:9/faq' } });
+  assert.strictEqual(res.status, 302);
+  assert.match(decodeURIComponent(res.headers.get('location')), /err=این آدرس قابل دسترسی نیست/);
+  assert.strictEqual(db.get().prepare('SELECT COUNT(*) n FROM faqs WHERE bot_id = ?').get(bot.id).n, 0);
+});
