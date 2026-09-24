@@ -154,7 +154,7 @@ function ask(bot, question, { sessionId = '', channel = 'web' } = {}) {
 
   const entry = loadIndex(bot.id);
   const results = engine.search(entry.index, q, { limit: 5 });
-  const decision = engine.decide(results);
+  const decision = engine.decide(results, { faqCount: entry.faqsById.size });
 
   if (decision.type === 'answer') {
     const faq = entry.faqsById.get(decision.best.id);

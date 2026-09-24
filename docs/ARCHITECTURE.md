@@ -25,7 +25,7 @@ src/config.js             env config (SITE_NAME, SITE_URL, payments, referral %)
 src/plans.js              free / pro / business plans + prepaid durations
 src/db.js                 SQLite schema (migrations) — db.get(), db.reset()
 src/bots.js               bot service: ask(), pick(), feedback(), addLead(), FAQ CRUD, index cache
-src/nlp/engine.js         retrieval engine (contract below)
+src/nlp/                  Persian retrieval engine: normalize, analyzer, lexicon, synonyms, engine (contract below)
 src/routes/widgetApi.js   public widget API  (/api/w/:key/...)
 src/routes/site.js        marketing site, SEO pages, auth, dashboard (lead)
 src/content/*.js          content data (contracts below)
@@ -42,8 +42,8 @@ with config.siteName, default «پاسخ‌یار»). Never hard-code the brand.
 normalize(text) -> string
 buildIndex(faqs: [{ id, question, alternates: string[], answer }]) -> index   // opaque
 search(index, query, { limit = 5 }) -> [{ id, score }]   // score in [0,1], desc
-decide(results) -> { type: 'answer'|'suggest'|'fallback', best: result|null, suggestions: result[] }
-THRESHOLDS = { answer, suggest }
+decide(results, { faqCount }?) -> { type: 'answer'|'suggest'|'fallback', best: result|null, suggestions: result[] }
+THRESHOLDS = { answer, answerSmall, smallBot, suggest, margin }   // bots under smallBot FAQs use answerSmall
 ```
 
 `bots.js` calls buildIndex once per bot (cached, rebuilt when FAQs change) and
