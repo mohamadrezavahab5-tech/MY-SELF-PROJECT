@@ -26,7 +26,11 @@ app.get('/widget.js', (req, res) => {
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   maxAge: config.isProd ? '7d' : 0,
   setHeaders(res, file) {
-    if (file.endsWith('.woff2')) res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    if (file.endsWith('.woff2')) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      // The widget loads these fonts from customers' sites; fonts are always fetched in CORS mode.
+      res.set('Access-Control-Allow-Origin', '*');
+    }
   },
 }));
 
