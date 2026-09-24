@@ -239,8 +239,8 @@ router.get('/app/bots/:botId/faqs', (req, res) => {
   <div class="row"><a class="btn btn-ghost btn-sm" href="#import">ورود گروهی</a><a class="btn btn-ghost btn-sm" href="${botUrl(bot, '/faqs/export.xlsx')}">خروجی اکسل</a></div></div>
 ${req.query.starter ? `<div class="notice" style="margin-bottom:16px">سؤال‌های آماده اضافه شدند. جاهای <mark class="placeholder-mark">[داخل کروشه]</mark> را با اطلاعات کسب‌وکارتان پر کنید و سؤال‌هایی را که به کارتان نمی‌آید حذف کنید.</div>` : ''}
 ${needEdit && filter !== 'placeholders' ? `<div class="notice" style="margin-bottom:16px">${faDigits(needEdit)} جواب هنوز جای خالی دارد. <a href="?filter=placeholders">نمایش همین‌ها</a></div>` : ''}
-<div class="panel">
-  <h2>افزودن سؤال جدید</h2>
+<details class="panel add-faq"${total && !req.query.question ? '' : ' open'}>
+  <summary><span class="btn btn-primary btn-sm">➕ افزودن سؤال جدید</span></summary>
   ${full ? `<p class="notice">به سقف سؤال‌های پلن ${esc(plan.name)} رسیده‌اید. <a href="/app/billing">ارتقای پلن</a></p>` : `
   <form class="form" method="post" action="${botUrl(bot, '/faqs')}">
     <div class="field"><label for="nq">سؤال</label><input id="nq" type="text" name="question" required maxlength="300" placeholder="مثلاً: هزینه‌ی ارسال چقدر است؟" value="${esc(req.query.question || '')}"></div>
@@ -248,7 +248,7 @@ ${needEdit && filter !== 'placeholders' ? `<div class="notice" style="margin-bot
     <div class="field"><label for="nans">جواب</label><textarea id="nans" name="answer" required maxlength="3000" rows="3"></textarea></div>
     <div><button class="btn btn-primary">افزودن</button></div>
   </form>`}
-</div>
+</details>
 <form class="row" method="get" style="margin-bottom:12px"><input type="search" name="q" placeholder="جستجو در سؤال‌ها…" value="${esc(q)}" style="max-width:320px">${filter ? `<input type="hidden" name="filter" value="${esc(filter)}">` : ''}<button class="btn btn-ghost btn-sm">جستجو</button>${q || filter ? `<a class="btn btn-sm btn-ghost" href="${botUrl(bot, '/faqs')}">همه</a>` : ''}</form>
 ${rows.length ? rows.map(f => faqItem(bot, f)).join('') : `<div class="empty"><div class="big">📝</div><p>${q || filter ? 'موردی پیدا نشد.' : 'هنوز سؤالی اضافه نکرده‌اید.'}</p></div>`}
 <div class="panel" id="import" style="margin-top:24px">

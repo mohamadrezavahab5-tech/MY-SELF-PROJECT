@@ -97,14 +97,15 @@ code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospac
 .mock-title { font-weight: 800; line-height: 1.3; }
 .mock-sub { font-size: .78rem; opacity: .85; }
 .mock-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #fafbff; min-height: 330px; }
-.bubble { max-width: 85%; padding: .6em .95em; border-radius: 16px; font-size: .93rem; line-height: 1.75; animation: pop .5s both; }
+.bubble { max-width: 85%; padding: .6em .95em; border-radius: 16px; font-size: .93rem; line-height: 1.75; }
+.mock .bubble { animation: pop .5s both; }
 .bubble.bot { background: #fff; border: 1px solid #eceef6; align-self: flex-start; border-start-start-radius: 4px; }
 .bubble.user { background: var(--primary); color: #fff; align-self: flex-end; border-start-end-radius: 4px; }
-.bubble:nth-child(2) { animation-delay: .5s; } .bubble:nth-child(3) { animation-delay: 1.1s; } .bubble:nth-child(4) { animation-delay: 1.7s; } .bubble:nth-child(5) { animation-delay: 2.3s; }
+.mock .bubble:nth-child(2) { animation-delay: .5s; } .mock .bubble:nth-child(3) { animation-delay: 1.1s; } .mock .bubble:nth-child(4) { animation-delay: 1.7s; } .mock .bubble:nth-child(5) { animation-delay: 2.3s; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: .8rem; border: 1px solid #c7d2fe; color: var(--primary); background: #fff; border-radius: 999px; padding: .25em .8em; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .bubble { animation: none; } html { scroll-behavior: auto; } .btn:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mock .bubble { animation: none; } html { scroll-behavior: auto; } .btn:hover { transform: none; } }
 
 /* Sections */
 .section { padding: 80px 0; }
@@ -255,6 +256,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: .93rem; }
 .faq-item .meta { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
 .faq-item form { padding: 0 16px 16px; }
 .faq-item.off { opacity: .6; }
+.add-faq > summary { list-style: none; cursor: pointer; }
+.add-faq > summary::-webkit-details-marker { display: none; }
+.add-faq[open] > summary { margin-bottom: 14px; }
 .placeholder-mark { background: #fef3c7; border-radius: 4px; padding: 0 3px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .row-between { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
