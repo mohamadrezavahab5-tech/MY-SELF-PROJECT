@@ -1,0 +1,22 @@
+{
+  "name": "pasokhyar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Persian customer-support chatbot SaaS for Iranian businesses and organizations",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "eval": "node --disable-warning=ExperimentalWarning scripts/eval-engine.js",
+    "seed": "node --disable-warning=ExperimentalWarning scripts/seed-demo.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "compression": "^1.8.2",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.3"
+  }
+}
