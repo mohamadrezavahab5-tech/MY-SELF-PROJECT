@@ -1852,13 +1852,13 @@ function search(botId, query, { limit = 3, explain = false } = {}) {
         } else if (s > best[d]) best[d] = s;
       }
     }
-    const prior = prior(q[i].term);
+    const termPrior = prior(q[i].term);
     for (const d of hit) {
       if (!seen[d]) {
         seen[d] = 1;
         touched.push(d);
       }
-      acc[d] += prior * best[d];
+      acc[d] += termPrior * best[d];
     }
   }
   touched.sort((a, b) => acc[b] - acc[a]);
