@@ -4,7 +4,8 @@ const express = require('express');
 const config = require('../config');
 const content = require('../content');
 const { PLANS, DURATIONS, priceToman } = require('../plans');
-const { page, abs } = require('../views/layout');
+const { page, abs, brand } = require('../views/layout');
+const settings = require('../settings');
 const db = require('../db');
 const { esc, formatNumber, faDigits, enDigits, rateLimiter, clientIp } = require('../util');
 const demo = require('../demoBot');
@@ -76,6 +77,16 @@ function ctaBand(title = 'همین امروز چت‌بات‌تان را بسا
 </div></div></section>`;
 }
 
+// Blog slugs may be Persian: always percent-encode them in URLs.
+function postPath(slug) {
+  return `/blog/${encodeURIComponent(slug)}`;
+}
+
+// Admin-editable hero title: plain text; the part wrapped in *asterisks* gets the gradient.
+function heroTitleHtml(text) {
+  return esc(brand(text)).replace(/\*([^*\n]+)\*/g, '<span class="grad">$1</span>').replace(/\*/g, '');
+}
+
 function chatMock() {
   return `<div class="mock" aria-hidden="true">
   <div class="mock-head"><div class="mock-avatar">ف</div><div><div class="mock-title">پشتیبانی فروشگاه</div><div class="mock-sub">پاسخگوی خودکار · همیشه آنلاین</div></div></div>
@@ -96,10 +107,10 @@ router.get('/', (req, res) => {
   <div class="container hero-grid">
     <div>
       <span class="eyebrow">🤖 چت‌بات فارسی · بدون اپراتور</span>
-      <h1>به سؤال‌های تکراری مشتری‌ها <span class="grad">۲۴ ساعته</span> جواب بدهید، بدون استخدام اپراتور</h1>
-      <p class="lead">سؤال و جواب‌هایتان را وارد کنید، یک خط کد در سایتتان بگذارید و تمام. ${esc(config.siteName)} هر روز و هر ساعت، فقط با پاسخ‌های تأییدشده‌ی خودتان جواب مشتری‌ها را می‌دهد و هر سؤالی را که بلد نیست برایتان جمع می‌کند.</p>
+      <h1>${heroTitleHtml(settings.value('home.heroTitle'))}</h1>
+      <p class="lead">${esc(brand(settings.value('home.heroText')))}</p>
       <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="/signup">ساخت چت‌بات رایگان</a>
+        <a class="btn btn-primary btn-lg" href="/signup">${esc(brand(settings.value('home.heroButton')))}</a>
         <button type="button" class="btn btn-outline btn-lg" data-pasokhyar-open>همین الان امتحانش کنید 💬</button>
       </div>
       <ul class="hero-notes"><li>پلن رایگان همیشگی</li><li>نصب در ۵ دقیقه</li><li>بدون نیاز به برنامه‌نویسی</li></ul>
@@ -165,8 +176,8 @@ ${faqSection(content.siteFaq)}
 ${ctaBand()}`;
 
   res.send(page({
-    title: `${config.siteName} | چت بات پاسخگوی خودکار فارسی برای سایت و بله`,
-    description: 'چت بات فارسی که ۲۴ ساعته و بدون اپراتور به سؤال‌های تکراری مشتری‌های سایت شما جواب می‌دهد. نصب در ۵ دقیقه، پلن رایگان، مخصوص کسب‌وکارهای ایرانی.',
+    title: settings.value('home.seoTitle'),
+    description: settings.value('home.seoDescription'),
     path: '/',
     user: req.user,
     body,
@@ -184,6 +195,9 @@ function planFeatures(p) {
     li(true, 'جمع‌آوری سؤال‌های بی‌جواب و درخواست تماس'),
     li(p.channels, 'اتصال به ربات بله'),
     li(p.export, 'خروجی اکسل'),
+    li(p.pages > 0, p.pages > 0 ? `یادگیری از ${formatNumber(p.pages)} صفحه‌ی سایت شما` : 'یادگیری از صفحه‌های سایت'),
+    // Only advertised when the owner has connected an AI server (/admin/settings/ai).
+    ...(config.llm && config.llm.baseUrl && config.llm.model ? [li(p.ai, 'پاسخ هوشمند با هوش مصنوعی')] : []),
     li(!p.badge, 'بدون نشان «قدرت‌گرفته از»'),
   ].join('');
 }
@@ -298,29 +312,33 @@ router.get('/blog', (req, res) => {
     user: req.user,
     body: `<div class="page-head"><div class="container center"><h1>مجله</h1><p class="muted">راهنماهای کاربردی پشتیبانی مشتری و چت‌بات برای کسب‌وکارهای ایرانی</p></div></div>
 <section class="section" style="padding-top:20px"><div class="container"><div class="grid grid-3">
-${content.blog.map(p => `<a class="card post-card" href="/blog/${esc(p.slug)}"><span class="post-meta">${esc(faDate(p.date))} · ${faDigits(p.readingMinutes)} دقیقه مطالعه</span><h3>${esc(p.title)}</h3><p class="muted">${esc(p.metaDescription)}</p></a>`).join('') || '<p class="muted">به‌زودی…</p>'}
+${content.blog.map(p => `<a class="card post-card" href="${esc(postPath(p.slug))}"><span class="post-meta">${esc(faDate(p.date))} · ${faDigits(p.readingMinutes)} دقیقه مطالعه</span><h3>${esc(p.title)}</h3><p class="muted">${esc(p.metaDescription)}</p></a>`).join('') || '<p class="muted">به‌زودی…</p>'}
 </div></div></section>`,
     jsonLd: breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'مجله', path: '/blog' }]),
   }));
 });
 
 router.get('/blog/:slug', (req, res, next) => {
-  const post = content.postBySlug(req.params.slug);
+  let post = content.postBySlug(req.params.slug);
+  // The admin can preview unpublished drafts (noindex, with a notice).
+  const draft = !post && req.user && req.user.is_admin ? content.draftBySlug(req.params.slug) : null;
+  if (draft) post = draft;
   if (!post) return next();
   const related = content.blog.filter(p => p.slug !== post.slug).slice(0, 3);
   res.send(page({
     title: `${post.title} | ${config.siteName}`,
     description: post.metaDescription,
-    path: `/blog/${post.slug}`,
+    path: postPath(post.slug),
+    noindex: !!draft,
     ogType: 'article',
     user: req.user,
-    body: `<div class="page-head"><div class="container narrow">
+    body: `${draft ? '<div class="container narrow" style="margin-top:16px"><div class="notice">پیش‌نمایش: این مطلب هنوز منتشر نشده و فقط مدیر سایت آن را می‌بیند.</div></div>' : ''}<div class="page-head"><div class="container narrow">
   <nav class="breadcrumbs"><a href="/">خانه</a> / <a href="/blog">مجله</a></nav>
   <h1>${esc(post.title)}</h1>
   <div class="post-meta">${esc(faDate(post.date))} · ${faDigits(post.readingMinutes)} دقیقه مطالعه</div>
 </div></div>
 <article class="section" style="padding-top:20px"><div class="container narrow prose">${post.bodyHtml}</div></article>
-${related.length ? `<section class="section section-soft"><div class="container"><h2 class="center">مطالب بیشتر</h2><div class="grid grid-3">${related.map(p => `<a class="card post-card" href="/blog/${esc(p.slug)}"><h3>${esc(p.title)}</h3><p class="muted">${esc(p.metaDescription)}</p></a>`).join('')}</div></div></section>` : ''}
+${related.length ? `<section class="section section-soft"><div class="container"><h2 class="center">مطالب بیشتر</h2><div class="grid grid-3">${related.map(p => `<a class="card post-card" href="${esc(postPath(p.slug))}"><h3>${esc(p.title)}</h3><p class="muted">${esc(p.metaDescription)}</p></a>`).join('')}</div></div></section>` : ''}
 ${ctaBand()}`,
     jsonLd: [{
       '@context': 'https://schema.org',
@@ -328,12 +346,12 @@ ${ctaBand()}`,
       headline: post.title,
       description: post.metaDescription,
       datePublished: post.date,
-      dateModified: post.date,
+      dateModified: post.updated && post.updated > post.date ? post.updated : post.date,
       inLanguage: 'fa-IR',
-      mainEntityOfPage: abs(`/blog/${post.slug}`),
+      mainEntityOfPage: abs(postPath(post.slug)),
       author: { '@type': 'Organization', name: config.siteName },
       publisher: orgLd(),
-    }, breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'مجله', path: '/blog' }, { name: post.title, path: `/blog/${post.slug}` }])],
+    }, breadcrumbLd([{ name: 'خانه', path: '/' }, { name: 'مجله', path: '/blog' }, { name: post.title, path: postPath(post.slug) }])],
   }));
 });
 
@@ -523,7 +541,7 @@ router.get('/sitemap.xml', (req, res) => {
     { loc: '/industries', priority: '0.8', lastmod: today },
     ...content.industries.map(i => ({ loc: `/industries/${i.seo.slug}`, priority: '0.8', lastmod: today })),
     { loc: '/blog', priority: '0.7', lastmod: today },
-    ...content.blog.map(p => ({ loc: `/blog/${p.slug}`, priority: '0.7', lastmod: p.date })),
+    ...content.blog.map(p => ({ loc: postPath(p.slug), priority: '0.7', lastmod: p.updated && p.updated > p.date ? p.updated : p.date })),
     { loc: '/faq-templates', priority: '0.8', lastmod: today },
     ...content.industries.map(i => ({ loc: `/faq-templates/${templateSlug(i)}`, priority: '0.8', lastmod: today })),
     { loc: '/enterprise', priority: '0.7', lastmod: today },

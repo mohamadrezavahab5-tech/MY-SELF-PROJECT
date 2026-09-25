@@ -37,6 +37,8 @@ function hasPlaceholder(text) {
 
 const TYPE_BADGE = {
   answer: '<span class="badge ok">جواب داد</span>',
+  passage: '<span class="badge ok">از متن سایت</span>',
+  ai: '<span class="badge primary">پاسخ هوشمند</span>',
   suggest: '<span class="badge warn">پیشنهاد داد</span>',
   fallback: '<span class="badge danger">بی‌جواب</span>',
   limit: '<span class="badge danger">سقف مصرف</span>',

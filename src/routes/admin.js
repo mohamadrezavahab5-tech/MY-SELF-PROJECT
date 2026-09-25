@@ -12,6 +12,8 @@ const { SYSTEM_PHONE } = require('../demoBot');
 
 const router = express.Router();
 router.use('/admin', auth.requireAdmin, auth.sameOrigin);
+// Site settings / CMS-lite: /admin/settings/* (brand, prices, payment, AI, FAQ, blog, pages).
+router.use(require('./adminSettings'));
 const form = express.urlencoded({ extended: false, limit: '4kb' });
 
 function render(req, res, title, body) {
@@ -39,8 +41,10 @@ router.get('/admin', (req, res) => {
   const payouts = conn.prepare(`SELECT p.*, u.name, u.phone FROM payouts p JOIN users u ON u.id = p.user_id ORDER BY p.status != 'requested', p.id DESC LIMIT 50`).all();
   const enquiries = conn.prepare(`SELECT * FROM contact_requests ORDER BY status != 'new', id DESC LIMIT 50`).all();
 
-  render(req, res, 'مدیریت سایت', `<div class="page-title"><h1>مدیریت سایت</h1></div>
+  render(req, res, 'مدیریت سایت', `<div class="page-title"><h1>مدیریت سایت</h1><a class="btn btn-primary btn-sm" href="/admin/settings">🛠️ تنظیمات سایت</a></div>
 ${req.query.ok ? '<div class="flash">انجام شد.</div>' : ''}
+<div class="panel settings-shortcuts"><div class="row-between"><div><h2 style="margin:0">تنظیمات سایت، بدون برنامه‌نویسی</h2><p class="muted" style="margin:0">نام و اطلاعات تماس، متن صفحه‌ی اول، قیمت‌ها و پلن‌ها، درگاه پرداخت، هوش مصنوعی، سؤالات متداول، مجله و صفحه‌های قوانین را از این‌جا تغییر دهید.</p></div></div>
+<div class="row" style="margin-top:10px">${[['general', '🏷️ عمومی'], ['home', '🏠 صفحه‌ی اول'], ['plans', '💰 قیمت‌ها'], ['referral', '🤝 همکاری در فروش'], ['payment', '💳 پرداخت'], ['ai', '🧠 هوش مصنوعی'], ['faq', '❓ سؤالات متداول'], ['blog', '📰 مجله'], ['pages', '📄 صفحه‌ها']].map(([id, label]) => `<a class="btn btn-sm btn-outline" href="/admin/settings/${id}">${label}</a>`).join('')}</div></div>
 <div class="stats">
   <div class="stat"><div class="n">${formatNumber(rev30)}</div><div class="l">درآمد ۳۰ روز (تومان)</div></div>
   <div class="stat"><div class="n">${formatNumber(paying)}</div><div class="l">مشترک فعال</div></div>

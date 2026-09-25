@@ -9,6 +9,8 @@ const PLANS = {
     bots: 1,
     faqs: 30,
     answersPerMonth: 150,
+    pages: 20,          // website pages the bot learns from
+    ai: false,          // generative answers (needs an LLM server)
     badge: true,
     channels: false,
     export: false,
@@ -20,6 +22,8 @@ const PLANS = {
     bots: 1,
     faqs: 600,
     answersPerMonth: 5000,
+    pages: 300,
+    ai: true,
     badge: false,
     channels: true,
     export: true,
@@ -31,6 +35,8 @@ const PLANS = {
     bots: 5,
     faqs: 5000,
     answersPerMonth: 40000,
+    pages: 3000,
+    ai: true,
     badge: false,
     channels: true,
     export: true,

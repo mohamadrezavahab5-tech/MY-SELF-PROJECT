@@ -103,11 +103,26 @@ function footer() {
 </footer>`;
 }
 
+// Optional site-wide announcement bar, set by the admin (/admin/settings).
+// Plain text: always escaped.
+function announceBar() {
+  let a;
+  try {
+    a = require('../settings').announcement();
+  } catch {
+    return '';
+  }
+  if (!a || !a.enabled) return '';
+  const text = esc(brand(a.text));
+  return `<div class="announce-bar" role="note"><div class="container">${a.link ? `<a href="${esc(a.link)}">${text} <span aria-hidden="true">←</span></a>` : text}</div></div>`;
+}
+
 // Public marketing page.
 function page(opts) {
   const { body, user = null, demoWidget = false } = opts;
   return `${head(opts)}
 <body>
+${announceBar()}
 ${header(user)}
 <main id="main">${body}</main>
 ${footer()}
@@ -119,11 +134,17 @@ ${demoWidget ? `<script src="/widget.js" data-bot="${esc(demoWidget)}" async></s
 // Logged-in dashboard page with side navigation.
 function dashPage({ title, body, user, bot = null, bots = [], active = '', flash = '' }) {
   const b = bot ? `/app/bots/${bot.id}` : '';
+  const waiting = bot ? liveWaiting(bot.id) : 0;
+  const liveBadge = waiting ? ` <span class="badge danger" data-live-count>${waiting}</span>` : '';
   const botNav = bot ? `
       <div class="side-label">${esc(bot.name)}</div>
-      ${navItem(`${b}`, 'نمای کلی', active === 'overview', '📊')}
+      ${navItem(`${b}`, 'نمای کلی', active === 'overview', '🏠')}
+      ${navItem(`${b}/live`, `گفتگوی زنده${liveBadge}`, active === 'live', '🟢')}
       ${navItem(`${b}/faqs`, 'سؤال و جواب‌ها', active === 'faqs', '💬')}
+      ${navItem(`${b}/knowledge`, 'یادگیری از سایت', active === 'knowledge', '🌐')}
       ${navItem(`${b}/inbox`, 'سؤال‌های بی‌جواب', active === 'inbox', '📥')}
+      ${navItem(`${b}/reports`, 'گزارش‌ها', active === 'reports', '📊')}
+      ${navItem(`${b}/qc`, 'کنترل کیفیت (QC)', active === 'qc', '✅')}
       ${navItem(`${b}/leads`, 'درخواست تماس', active === 'leads', '📞')}
       ${navItem(`${b}/test`, 'امتحان بات', active === 'test', '🧪')}
       ${navItem(`${b}/install`, 'نصب روی سایت', active === 'install', '🔌')}
@@ -144,10 +165,12 @@ function dashPage({ title, body, user, bot = null, bots = [], active = '', flash
     <nav>
       ${botNav}
       <div class="side-label">حساب</div>
+      ${navItem('/app/integrations', 'اتصال به CRM و مرکز تماس', active === 'integrations', '🔗')}
       ${navItem('/app/billing', 'اشتراک و پرداخت', active === 'billing', '💳')}
       ${navItem('/app/referral', 'کسب درآمد', active === 'referral', '🎁')}
       ${navItem('/app/bots/new', 'بات جدید', active === 'newbot', '➕')}
       ${user.is_admin ? navItem('/admin', 'مدیریت سایت', active === 'admin', '🛡️') : ''}
+      ${user.is_admin ? navItem('/admin/settings', 'تنظیمات سایت', active === 'site-settings', '🛠️') : ''}
     </nav>
   </aside>
   <main class="dash-main" id="main">
@@ -158,6 +181,15 @@ function dashPage({ title, body, user, bot = null, bots = [], active = '', flash
 <script src="/js/dash.js" defer></script>
 </body>
 </html>`;
+}
+
+// Conversations where a visitor is waiting for a human reply.
+function liveWaiting(botId) {
+  try {
+    return require('../db').get().prepare(`SELECT COUNT(*) AS n FROM conversations WHERE bot_id = ? AND mode = 'human' AND operator_unread > 0`).get(botId).n;
+  } catch {
+    return 0;
+  }
 }
 
 function navItem(href, label, active, icon) {

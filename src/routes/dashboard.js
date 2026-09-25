@@ -11,6 +11,8 @@ const content = require('../content');
 const channels = require('../channels');
 const engine = require('../nlp/engine');
 const importer = require('../importer');
+const llm = require('../llm');
+const { LANGS } = require('../i18n');
 const { effectivePlan, PLANS } = require('../plans');
 const { dashPage } = require('../views/layout');
 const { faDateTime, ago, markPlaceholders, hasPlaceholder, TYPE_BADGE } = require('../views/helpers');
@@ -93,6 +95,7 @@ function newBotForm(req, { title, intro }) {
     <div class="field"><span class="label">حوزه‌ی کاری</span>
       <div class="industry-pick">${opts}<label><input type="radio" name="industry" value=""${pre ? '' : ' checked'}> <span>✳️ سایر</span></label></div>
     </div>
+    <div class="field"><label for="new-lang">زبان بات</label><select id="new-lang" name="lang">${Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select><span class="hint">برای سایت‌های خارجی انگلیسی، عربی یا ترکی را انتخاب کنید.</span></div>
     <div class="field"><label for="faq-url">آدرس صفحه‌ی «سؤالات متداول» سایت‌تان <span class="hint">(اختیاری)</span></label>
       <input id="faq-url" name="url" type="url" class="ltr" placeholder="https://example.ir/faq">
       <span class="hint">اگر سایت‌تان صفحه‌ی سؤالات متداول دارد، آدرسش را بدهید تا همه‌ی سؤال و جواب‌ها خودکار وارد بات شوند.</span></div>
@@ -127,7 +130,8 @@ router.post('/app/bots/new', form, async (req, res) => {
   if (userBots(req.user).length >= plan.bots) return res.redirect('/app/bots/new');
   const name = String(req.body.name || '').trim().slice(0, 60) || req.user.company || 'بات من';
   const industry = content.industryById(String(req.body.industry || ''));
-  const bot = bots.createBot(req.user.id, { name, industry: industry ? industry.id : '' });
+  const lang = LANGS[req.body.lang] ? req.body.lang : 'fa';
+  const bot = bots.createBot(req.user.id, { name, industry: industry ? industry.id : '', lang });
   // The customer's own FAQ page goes in first: it beats generic starter answers.
   let fromSite = 0;
   let siteError = '';
@@ -137,7 +141,7 @@ router.post('/app/bots/new', form, async (req, res) => {
     siteError = r.error;
   }
   let imported = 0;
-  if (industry && req.body.starter) imported = importStarter(bot, industry, plan);
+  if (industry && req.body.starter && lang === 'fa') imported = importStarter(bot, industry, plan);
   const next = safeNext(req.body.next, '');
   if (next) return res.redirect(next);
   const q = siteError ? `&err=${encodeURIComponent(siteError)}` : (fromSite ? `&site=${fromSite}` : '');
@@ -189,12 +193,12 @@ router.get('/app/bots/:botId', (req, res) => {
   const since = Date.now() - 30 * 86400_000;
   const counts = conn.prepare(`
     SELECT
-      SUM(type = 'answer') AS answered,
+      SUM(type IN ('answer', 'passage', 'ai')) AS answered,
       SUM(type IN ('suggest','fallback','limit')) AS missed,
       COUNT(*) AS total
     FROM messages WHERE bot_id = ? AND created_at >= ? AND channel != 'test'
   `).get(bot.id, since);
-  const open = conn.prepare(`SELECT COUNT(*) AS n FROM messages WHERE bot_id = ? AND type != 'answer' AND resolved = 0 AND channel != 'test'`).get(bot.id).n;
+  const open = conn.prepare(`SELECT COUNT(*) AS n FROM messages WHERE bot_id = ? AND type IN ('suggest', 'fallback', 'limit') AND resolved = 0 AND channel != 'test'`).get(bot.id).n;
   const newLeads = conn.prepare(`SELECT COUNT(*) AS n FROM leads WHERE bot_id = ? AND status = 'new'`).get(bot.id).n;
   const nFaqs = faqCount(bot.id);
   const needEdit = conn.prepare('SELECT answer FROM faqs WHERE bot_id = ?').all(bot.id).filter(r => hasPlaceholder(r.answer)).length;
@@ -459,7 +463,7 @@ router.post('/app/bots/:botId/faqs/:faqId/delete', form, (req, res) => {
 router.get('/app/bots/:botId/inbox', (req, res) => {
   const bot = req.bot;
   const rows = db.get().prepare(`
-    SELECT * FROM messages WHERE bot_id = ? AND type != 'answer' AND resolved = 0 AND channel != 'test'
+    SELECT * FROM messages WHERE bot_id = ? AND type IN ('suggest', 'fallback', 'limit') AND resolved = 0 AND channel != 'test'
     ORDER BY id DESC LIMIT 500
   `).all(bot.id);
   // Group identical questions (after normalization) so repeats show as one row.
@@ -504,7 +508,7 @@ function loadMsg(req) {
 // Resolve every open message with the same normalized wording.
 function resolveSimilar(bot, question) {
   const key = engine.normalize(question);
-  const open = db.get().prepare(`SELECT id, question FROM messages WHERE bot_id = ? AND type != 'answer' AND resolved = 0`).all(bot.id);
+  const open = db.get().prepare(`SELECT id, question FROM messages WHERE bot_id = ? AND type IN ('suggest', 'fallback', 'limit') AND resolved = 0`).all(bot.id);
   const upd = db.get().prepare('UPDATE messages SET resolved = 1 WHERE id = ?');
   db.get().transaction(() => { for (const m of open) if (engine.normalize(m.question) === key) upd.run(m.id); })();
 }
@@ -588,9 +592,9 @@ router.get('/app/bots/:botId/test', (req, res) => {
   });
 });
 
-router.post('/app/bots/:botId/test.json', express.json({ limit: '4kb' }), (req, res) => {
+router.post('/app/bots/:botId/test.json', express.json({ limit: '4kb' }), async (req, res) => {
   const q = String((req.body && req.body.q) || '').slice(0, 500);
-  const reply = bots.ask(req.bot, q, { sessionId: `test:${req.user.id}`, channel: 'test' });
+  const reply = await bots.ask(req.bot, q, { sessionId: `test:${req.user.id}`, channel: 'test' });
   // Debug view: the top candidates with their scores, so owners see why.
   res.json({ ok: true, reply, top: bots.debugSearch(req.bot, q) });
 });
@@ -683,19 +687,48 @@ router.post('/app/bots/:botId/channels/:channel/disconnect', form, async (req, r
 
 router.get('/app/bots/:botId/settings', (req, res) => {
   const bot = req.bot;
+  const plan = effectivePlan(req.user);
+  const aiReady = llm.isConfigured();
+  const opt = (v, cur, label) => `<option value="${v}"${cur === v ? ' selected' : ''}>${label}</option>`;
   render(req, res, {
     title: 'تنظیمات بات', bot, active: 'settings',
     body: `<div class="page-title"><h1>تنظیمات بات</h1></div>
-<div class="panel"><form class="form" method="post" action="${botUrl(bot, '/settings')}">
+<form class="form" method="post" action="${botUrl(bot, '/settings')}">
+<div class="panel">
+  <h2>ظاهر و پیام‌ها</h2>
   <div class="field"><label for="s-name">اسم بات</label><input id="s-name" type="text" name="name" required maxlength="60" value="${esc(bot.name)}"></div>
+  <div class="field"><label for="s-lang">زبان بات و ویجت</label>
+    <select id="s-lang" name="lang">${Object.entries(LANGS).map(([k, v]) => opt(k, bot.lang, v.name)).join('')}</select>
+    <span class="hint">برای سایت‌های خارجی، زبان ویجت و پیام‌های خودکار را عوض کنید. سؤال و جواب‌ها را هم به همان زبان بنویسید.</span></div>
   <div class="field"><label for="s-w">پیام خوشامد</label><textarea id="s-w" name="welcome" rows="2" maxlength="500">${esc(bot.welcome)}</textarea></div>
   <div class="field"><label for="s-f">پیام وقتی جواب را نمی‌داند</label><textarea id="s-f" name="fallback" rows="2" maxlength="500">${esc(bot.fallback)}</textarea></div>
   <div class="row"><div class="field"><label for="s-c">رنگ</label><input id="s-c" type="color" name="color" value="${esc(bot.color)}"></div>
-    <div class="field"><label for="s-p">جای دکمه</label><select id="s-p" name="position"><option value="right"${bot.position === 'right' ? ' selected' : ''}>پایین راست</option><option value="left"${bot.position === 'left' ? ' selected' : ''}>پایین چپ</option></select></div></div>
+    <div class="field"><label for="s-p">جای دکمه</label><select id="s-p" name="position">${opt('right', bot.position, 'پایین راست')}${opt('left', bot.position, 'پایین چپ')}</select></div></div>
   <label class="check"><input type="checkbox" name="lead_form" value="1"${bot.lead_form ? ' checked' : ''}> وقتی جواب را نمی‌داند، نام و شماره‌ی مشتری را بگیرد</label>
-  <div><button class="btn btn-primary">ذخیره</button></div>
-</form></div>
-<div class="panel"><h2>حذف بات</h2><p class="muted">همه‌ی سؤال‌ها، گفتگوها و درخواست‌های این بات برای همیشه پاک می‌شود.</p>
+</div>
+<div class="panel">
+  <h2>🟢 گفتگوی زنده با پشتیبان</h2>
+  <label class="check"><input type="checkbox" name="live_chat" value="1"${bot.live_chat ? ' checked' : ''}> مشتری بتواند درخواست «صحبت با پشتیبان» بدهد</label>
+  <p class="hint">وقتی صفحه‌ی «گفتگوی زنده» در داشبورد باز باشد، شما آنلاین دیده می‌شوید و همان لحظه جواب می‌دهید. وقتی آنلاین نیستید، پیام مشتری برای‌تان می‌ماند و شماره‌اش گرفته می‌شود.</p>
+</div>
+<div class="panel">
+  <h2>🧠 پاسخ هوشمند (هوش مصنوعی)</h2>
+  <label class="check"><input type="checkbox" name="ai_enabled" value="1"${bot.ai_enabled ? ' checked' : ''}${plan.ai ? '' : ' disabled'}> وقتی جواب دقیق در سؤال‌ها نیست، با هوش مصنوعی و فقط از روی اطلاعات خودتان جواب بدهد</label>
+  ${plan.ai ? '' : '<p class="notice">پاسخ هوشمند در پلن‌های حرفه‌ای و سازمانی فعال است. <a href="/app/billing">ارتقای پلن</a></p>'}
+  ${aiReady ? '<p class="hint">سرور هوش مصنوعی وصل است.</p>' : '<p class="hint">سرور هوش مصنوعی هنوز تنظیم نشده است. تا وقتی مدیر سایت آن را وصل نکند، بات با همان سؤال و جواب‌ها و متن سایت‌تان جواب می‌دهد.</p>'}
+</div>
+<div class="panel">
+  <h2>👋 پیام خوش‌آمد هوشمند</h2>
+  <p class="hint">بعد از چند ثانیه ماندن مشتری در صفحه، بات خودش یک پیام کوتاه کنار دکمه‌ی گفتگو نشان می‌دهد.</p>
+  <div class="field"><label for="s-pt">متن پیام (خالی = خاموش)</label><input id="s-pt" type="text" name="proactive_text" maxlength="140" value="${esc(bot.proactive_text)}" placeholder="مثلاً: سؤالی درباره‌ی ارسال دارید؟ همین‌جا بپرسید 🙂"></div>
+  <div class="row">
+    <div class="field"><label for="s-pd">بعد از چند ثانیه؟</label><input id="s-pd" type="number" name="proactive_delay" min="0" max="600" value="${Number(bot.proactive_delay) || 20}"></div>
+    <div class="field" style="flex:1;min-width:200px"><label for="s-pp">فقط در صفحه‌هایی که آدرس‌شان شامل این باشد (اختیاری)</label><input id="s-pp" type="text" class="ltr" name="proactive_path" maxlength="120" value="${esc(bot.proactive_path)}" placeholder="/pricing"></div>
+  </div>
+</div>
+<div><button class="btn btn-primary btn-lg">ذخیره‌ی تنظیمات</button></div>
+</form>
+<div class="panel" style="margin-top:24px"><h2>حذف بات</h2><p class="muted">همه‌ی سؤال‌ها، گفتگوها و درخواست‌های این بات برای همیشه پاک می‌شود.</p>
 <form method="post" action="${botUrl(bot, '/delete')}"><button class="btn btn-danger btn-sm" data-confirm="مطمئنید؟ این کار برگشت‌پذیر نیست.">حذف بات</button></form></div>`,
   });
 });
@@ -703,13 +736,23 @@ router.get('/app/bots/:botId/settings', (req, res) => {
 router.post('/app/bots/:botId/settings', form, (req, res) => {
   const b = req.body;
   const color = /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : req.bot.color;
+  const plan = effectivePlan(req.user);
+  const proactiveText = String(b.proactive_text || '').trim().slice(0, 140);
+  const delay = Math.max(0, Math.min(600, parseInt(b.proactive_delay, 10) || 0));
   db.get().prepare(`
-    UPDATE bots SET name = ?, welcome = ?, fallback = ?, color = ?, position = ?, lead_form = ?, updated_at = ? WHERE id = ?
+    UPDATE bots SET name = ?, lang = ?, welcome = ?, fallback = ?, color = ?, position = ?, lead_form = ?,
+      live_chat = ?, ai_enabled = ?, proactive_text = ?, proactive_delay = ?, proactive_path = ?, updated_at = ?
+    WHERE id = ?
   `).run(
     String(b.name || '').trim().slice(0, 60) || req.bot.name,
+    LANGS[b.lang] ? b.lang : req.bot.lang,
     String(b.welcome || '').trim().slice(0, 500) || req.bot.welcome,
     String(b.fallback || '').trim().slice(0, 500) || req.bot.fallback,
-    color, b.position === 'left' ? 'left' : 'right', b.lead_form ? 1 : 0, Date.now(), req.bot.id,
+    color, b.position === 'left' ? 'left' : 'right', b.lead_form ? 1 : 0,
+    b.live_chat ? 1 : 0,
+    b.ai_enabled && plan.ai ? 1 : 0,
+    proactiveText, proactiveText ? delay || 20 : 0, String(b.proactive_path || '').trim().slice(0, 120),
+    Date.now(), req.bot.id,
   );
   res.redirect(botUrl(req.bot, '/settings?ok=settings'));
 });

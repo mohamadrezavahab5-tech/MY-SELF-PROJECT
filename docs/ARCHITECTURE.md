@@ -90,3 +90,51 @@ Hosted page: `/c/:key` loads the same script with `data-mode="page"` (full-scree
 `blog.js` — array of `{ slug, title, metaDescription, date: 'YYYY-MM-DD', readingMinutes, bodyHtml, related: [industryId] }`
 `siteFaq.js` — array of `{ q, a }` (plain text) for home/pricing FAQ.
 `pages.js` — `{ terms: { title, bodyHtml }, privacy: { title, bodyHtml }, about: { title, bodyHtml } }`
+
+## v2 additions (live chat, website knowledge, AI answers, analytics)
+
+### Answer pipeline (`src/bots.js` → `ask()`, async)
+1. FAQ engine (`src/nlp/engine.js`) — confident match → FAQ answer (`kind: 'faq'`).
+2. Website knowledge (`src/knowledge.js`) — confident passage → snippet + source link (`kind: 'passage'`).
+3. Generative AI (`src/llm.js`, optional, per bot + plan) — only when steps 1–2 found
+   *some* relevant context; the model must answer from that context or reply NO_ANSWER
+   (`kind: 'ai'`). Never called for off-topic questions.
+4. Otherwise suggestions / fallback / lead form, as before.
+
+Every visitor/bot/operator message is also written to the transcript
+(`conversations` + `chat_messages`); `messages` stays the per-question analytics log.
+`messages.type` values: `answer` (FAQ) | `passage` | `ai` | `suggest` | `fallback` | `limit`.
+Answer-type rows (`answer`, `passage`, `ai`) count toward the monthly plan limit.
+
+### Knowledge contract — `src/knowledge.js`
+```js
+startCrawl(bot, url, { maxPages })   -> source row; crawl runs in the background
+recrawl(bot, sourceId)               -> source row
+deleteSource(bot, sourceId)
+listSources(botId)                   -> rows
+search(botId, query, { limit = 3 })  -> [{ id, url, title, heading, text, score }]  // score in [0,1]
+snippet(passage, query, maxChars = 400) -> string   // the most relevant sentences
+THRESHOLDS = { answer, context }     // answer: show passage directly; context: good enough to ground the AI
+```
+Crawling reuses `importer.fetchPage` (SSRF-guarded). Same-host pages only, sitemap.xml
+first, then links; plan limit `plans[x].pages`.
+
+### Widget API additions (`/api/w/:key/…`)
+```
+GET  config -> bot adds: lang: 'fa'|'en'|'ar'|'tr', liveChat: bool, operatorOnline: bool, ai: bool,
+               proactive: { text, delay, path } | null   (config.placeholder was removed: UI strings are the widget's, per lang)
+POST ask    -> reply adds: kind: 'faq'|'passage'|'ai', sources: [{ url, title }]
+POST ask-stream { q, sid, channel?, page? }  (text/event-stream)
+     event: delta  data: { text }            (append to the bubble; FAQ/passage answers arrive as one delta)
+     event: done   data: { ok, ...same object as POST ask returns }   (final: messageId, type, kind, sources…)
+     event: error  data: { message }         (widget falls back to POST ask)
+     reply.type 'human' = an operator is handling this chat; nothing to show (operator messages arrive via poll)
+POST handoff { sid, name?, phone? } -> { ok, online, message }   visitor asks for a human
+POST send    { sid, text }          -> { ok, id }                visitor message while mode = human
+GET  poll?sid=&after=<lastId>       -> { ok, mode, operatorOnline,
+                                          messages: [{ id, sender: 'operator'|'system', text, at }] }
+POST end     { sid }                -> { ok }                     back to the bot
+```
+
+### Dashboard pages (all under `/app/bots/:botId/…`, owner-checked)
+`live` (live chat inbox, me), `knowledge` (website sources), `reports` (analytics charts).

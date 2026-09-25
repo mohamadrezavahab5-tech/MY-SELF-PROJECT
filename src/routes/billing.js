@@ -117,20 +117,20 @@ router.get('/pay/callback', async (req, res) => {
   }
 });
 
-// Local-development stand-in for the gateway page. Never mounted in production.
-if (config.payment.mode === 'mock') {
-  router.get('/pay/mock/:authority', (req, res) => {
-    const order = billing.orderByAuthority(req.params.authority);
-    if (!order) return res.status(404).send('not found');
-    const back = s => `/pay/callback?Authority=${encodeURIComponent(order.authority)}&Status=${s}`;
-    res.send(authPage({
-      title: 'درگاه آزمایشی',
-      body: `<h1>درگاه پرداخت آزمایشی</h1><p class="notice">این صفحه فقط در حالت توسعه نمایش داده می‌شود و پولی جابه‌جا نمی‌شود.</p>
+// Local-development stand-in for the gateway page. The payment mode can change
+// at runtime (/admin/settings), so it is checked per request; never in production.
+router.get('/pay/mock/:authority', (req, res, next) => {
+  if (config.isProd || config.payment.mode !== 'mock') return next();
+  const order = billing.orderByAuthority(req.params.authority);
+  if (!order) return res.status(404).send('not found');
+  const back = s => `/pay/callback?Authority=${encodeURIComponent(order.authority)}&Status=${s}`;
+  res.send(authPage({
+    title: 'درگاه آزمایشی',
+    body: `<h1>درگاه پرداخت آزمایشی</h1><p class="notice">این صفحه فقط در حالت توسعه نمایش داده می‌شود و پولی جابه‌جا نمی‌شود.</p>
 <p>مبلغ: <strong>${formatToman(order.amount)}</strong></p>
 <div class="row"><a class="btn btn-primary" href="${back('OK')}">پرداخت موفق</a><a class="btn btn-ghost" href="${back('NOK')}">انصراف</a></div>`,
-    }));
-  });
-}
+  }));
+});
 
 // ---- Referral / affiliate ----------------------------------------------------------
 

@@ -47,6 +47,17 @@ module.exports = {
     merchant: env.ZARINPAL_MERCHANT || '',
   },
 
+  // Optional generative answers through any OpenAI-compatible chat endpoint
+  // the owner runs themselves (e.g. Ollama or vLLM serving an open-weight
+  // model such as Qwen or Gemma). Empty baseUrl = feature off.
+  llm: {
+    baseUrl: (env.LLM_BASE_URL || '').replace(/\/+$/, ''),
+    model: env.LLM_MODEL || '',
+    apiKey: env.LLM_API_KEY || '',
+    timeoutMs: int('LLM_TIMEOUT_MS', 30000),
+    maxTokens: int('LLM_MAX_TOKENS', 350),
+  },
+
   referral: {
     commissionPercent: int('REFERRAL_COMMISSION_PERCENT', 25),
     buyerDiscountPercent: int('REFERRAL_DISCOUNT_PERCENT', 10),

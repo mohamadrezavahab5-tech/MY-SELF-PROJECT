@@ -5,6 +5,9 @@ const compression = require('compression');
 const config = require('./config');
 const { esc } = require('./util');
 
+// Site-owner settings saved in /admin/settings override env/code defaults in place.
+require('./settings').apply();
+
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);

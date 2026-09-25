@@ -6,12 +6,22 @@ const db = require('./db');
 const bots = require('./bots');
 const content = require('./content');
 const config = require('./config');
+const settings = require('./settings');
 const { hashPassword, token } = require('./util');
 
 const SYSTEM_PHONE = 'system';
 const DEMO_KEY = 'sitedemo';
 
 let cachedKey = null;
+// What the demo bot was last synced from; the site owner can change the site
+// name or the site FAQ at runtime (/admin/settings), so key() re-checks it.
+let syncedConn = null;
+let syncedStamp = null;
+let syncedFaqJson = null;
+
+function stamp() {
+  return `${config.siteName}\u0000${config.siteUrl}\u0000${settings.version()}`;
+}
 
 function extraFaqs() {
   return [
@@ -54,31 +64,39 @@ function ensure() {
     user = conn.prepare('SELECT * FROM users WHERE phone = ?').get(SYSTEM_PHONE);
   }
   let bot = bots.getBotByKey(DEMO_KEY);
-  if (!bot) {
-    bot = bots.createBot(user.id, { name: `دستیار ${config.siteName}` });
-    conn.prepare('UPDATE bots SET public_key = ?, welcome = ? WHERE id = ?').run(
-      DEMO_KEY,
-      `سلام! 👋 من نمونه‌ی زنده‌ی ${config.siteName} هستم. هر سؤالی درباره‌ی چت‌بات، قیمت یا نصب دارید بپرسید.`,
-      bot.id,
-    );
+  if (!bot) bot = bots.createBot(user.id, { name: `دستیار ${config.siteName}` });
+  // Name and welcome carry the brand name, which the admin can change.
+  const name = `دستیار ${config.siteName}`;
+  const welcome = `سلام! 👋 من نمونه‌ی زنده‌ی ${config.siteName} هستم. هر سؤالی درباره‌ی چت‌بات، قیمت یا نصب دارید بپرسید.`;
+  if (bot.public_key !== DEMO_KEY || bot.name !== name || bot.welcome !== welcome) {
+    conn.prepare('UPDATE bots SET public_key = ?, name = ?, welcome = ?, updated_at = ? WHERE id = ?').run(DEMO_KEY, name, welcome, Date.now(), bot.id);
   }
-  // Re-sync the FAQ from content on every boot so edits to siteFaq.js show up.
+  if (user.name !== config.siteName) {
+    conn.prepare('UPDATE users SET name = ?, company = ? WHERE id = ?').run(config.siteName, config.siteName, user.id);
+  }
+  // Re-sync the FAQ from the (admin-editable) site FAQ on boot and whenever it changes.
   const faqs = [...extraFaqs(), ...content.siteFaq.map(f => ({ question: f.q, alternates: [], answer: f.a }))];
-  conn.transaction(() => {
-    conn.prepare('DELETE FROM faqs WHERE bot_id = ?').run(bot.id);
-    for (const f of faqs) bots.addFaq(bot.id, f);
-  })();
+  const faqJson = JSON.stringify(faqs);
+  if (syncedConn !== conn || faqJson !== syncedFaqJson) {
+    conn.transaction(() => {
+      conn.prepare('DELETE FROM faqs WHERE bot_id = ?').run(bot.id);
+      for (const f of faqs) bots.addFaq(bot.id, f);
+    })();
+    syncedFaqJson = faqJson;
+  }
+  syncedConn = conn;
+  syncedStamp = stamp();
   cachedKey = DEMO_KEY;
   return DEMO_KEY;
 }
 
 function key() {
-  if (cachedKey) return cachedKey;
   try {
+    if (cachedKey && syncedConn === db.get() && syncedStamp === stamp()) return cachedKey;
     return ensure();
   } catch (e) {
     console.error('demo bot setup failed:', e.message);
-    return null;
+    return cachedKey;
   }
 }
 

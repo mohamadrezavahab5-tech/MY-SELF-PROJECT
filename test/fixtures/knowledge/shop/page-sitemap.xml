@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	<url><loc>https://baran-tea.ir/</loc></url>
+	<url><loc>https://baran-tea.ir/about-us/</loc><image:image><image:loc>https://baran-tea.ir/wp-content/uploads/garden.jpg</image:loc></image:image></url>
+	<url><loc>https://baran-tea.ir/contact-us/</loc></url>
+	<url><loc>https://baran-tea.ir/shipping/</loc></url>
+	<url><loc><![CDATA[https://baran-tea.ir/%d8%b1%d9%88%db%8c%d9%87-%d8%a8%d8%a7%d8%b2%da%af%d8%b1%d8%af%d8%a7%d9%86%d8%af%d9%86-%da%a9%d8%a7%d9%84%d8%a7/]]></loc></url>
+	<url><loc>https://baran-tea.ir/faq/</loc></url>
+	<url><loc>https://baran-tea.ir/cart/</loc></url>
+	<url><loc>https://baran-tea.ir/my-account/</loc></url>
+</urlset>

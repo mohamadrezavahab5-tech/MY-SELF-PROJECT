@@ -123,7 +123,13 @@ async function handleUpdate(channel, bot, update) {
     await callApi(channel, botToken, 'sendMessage', { chat_id: chatId, text: bot.welcome });
     return;
   }
-  const reply = bots.ask(bot, text, { sessionId, channel });
+  if (/^(\/support|\/operator|پشتیبان|اپراتور|صحبت با پشتیبان)$/i.test(text) && bot.live_chat) {
+    const r = bots.requestHuman(bot, sessionId, { channel, name: [msg.from && msg.from.first_name, msg.from && msg.from.last_name].filter(Boolean).join(' ') });
+    await callApi(channel, botToken, 'sendMessage', { chat_id: chatId, text: r.message });
+    return;
+  }
+  const reply = await bots.ask(bot, text, { sessionId, channel });
+  if (reply.type === 'human') return; // an operator is handling this chat from the dashboard
   const payload = { chat_id: chatId, text: replyText(reply) };
   const markup = replyMarkup(reply);
   if (markup) payload.reply_markup = markup;
@@ -140,4 +146,14 @@ router.post('/hooks/:channel/:botId/:secret', express.json({ limit: '256kb' }), 
   handleUpdate(req.params.channel, bot, req.body || {}).catch(e => console.error(`[${req.params.channel}] bot ${bot.id}:`, e.message));
 });
 
-module.exports = { CHANNELS, connect, disconnect, handleUpdate, router };
+// Operator replies from the dashboard to a Bale/Telegram conversation.
+async function sendToChat(bot, channel, sessionId, text) {
+  const ch = CHANNELS[channel];
+  if (!ch || !bot[ch.tokenCol]) return false;
+  const chatId = String(sessionId).split(':')[1];
+  if (!chatId) return false;
+  await callApi(channel, bot[ch.tokenCol], 'sendMessage', { chat_id: chatId, text });
+  return true;
+}
+
+module.exports = { CHANNELS, connect, disconnect, handleUpdate, sendToChat, router };
