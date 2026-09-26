@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="//baran-tea.ir/main-sitemap.xsl"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	<sitemap><loc>https://baran-tea.ir/post-sitemap.xml</loc><lastmod>2024-05-01T10:00:00+00:00</lastmod></sitemap>
+	<sitemap><loc>https://baran-tea.ir/page-sitemap.xml</loc><lastmod>2024-05-01T10:00:00+00:00</lastmod></sitemap>
+	<sitemap><loc>https://baran-tea.ir/product-sitemap.xml</loc><lastmod>2024-05-01T10:00:00+00:00</lastmod></sitemap>
+	<sitemap><loc>https://baran-tea.ir/post_tag-sitemap.xml</loc></sitemap>
+	<sitemap><loc>https://baran-tea.ir/author-sitemap.xml</loc></sitemap>
+</sitemapindex>

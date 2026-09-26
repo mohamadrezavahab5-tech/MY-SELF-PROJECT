@@ -1,0 +1,19 @@
+{
+  "name": "pasokhyar-ai-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local embeddings (BGE-M3) and reranking (bge-reranker-v2-m3) service for Pasokhyar, run on the owner's own PC or AI box",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "download-models": "node scripts/download-models.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "onnxruntime-node": "^1.27.0",
+    "sentencepiece-js": "^1.1.0"
+  }
+}

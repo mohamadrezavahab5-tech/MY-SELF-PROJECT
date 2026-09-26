@@ -1,0 +1,36 @@
+{
+  "origin": "https://baran-tea.ir",
+  "layout": "_layout.html",
+  "sidebar": "_sidebar.html",
+  "pages": {
+    "/": { "file": "home.html", "title": "چای و دمنوش ایرانی", "bodyclass": "home page-template-default page" },
+    "/about-us/": { "file": "about.html", "title": "درباره ما", "sidebar": true },
+    "/contact-us/": { "file": "contact.html", "title": "تماس با ما" },
+    "/shipping/": { "file": "shipping.html", "title": "شرایط ارسال و تحویل سفارش" },
+    "/رویه-بازگرداندن-کالا/": { "file": "returns.html", "title": "رویه بازگرداندن کالا" },
+    "/faq/": { "file": "faq.html", "title": "سوالات متداول" },
+    "/guarantee/": { "file": "guarantee.html", "title": "ضمانت اصالت کالا" },
+    "/shop/": { "file": "shop.html", "title": "فروشگاه", "bodyclass": "archive post-type-archive-product" },
+    "/product/چای-سبز-لاهیجان/": { "file": "product-green.html", "title": "چای سبز لاهیجان ۲۰۰ گرمی", "bodyclass": "product-template-default single single-product" },
+    "/product/دمنوش-به-لیمو/": { "file": "product-lemon.html", "title": "دمنوش به‌لیمو", "bodyclass": "single single-product" },
+    "/blog/": { "file": "blog.html", "title": "مجله چای", "sidebar": true, "bodyclass": "blog" },
+    "/blog/فواید-چای-سبز/": { "file": "blog-green.html", "title": "۵ فایده‌ی علمی چای سبز که باید بدانید", "sidebar": true, "bodyclass": "post-template-default single single-post" },
+    "/blog/how-to-brew/": { "file": "blog-brew.html", "title": "طرز دم کردن چای ایرانی", "sidebar": true, "bodyclass": "single single-post" },
+    "/cart/": { "file": "junk.html", "title": "سبد خرید", "junk": true },
+    "/my-account/": { "file": "junk.html", "title": "حساب کاربری من", "junk": true },
+    "/private/secret/": { "file": "junk.html", "title": "محرمانه", "junk": true },
+    "/tag/چای-سبز/": { "file": "junk.html", "title": "برچسب چای سبز", "junk": true },
+    "/author/admin/": { "file": "junk.html", "title": "مدیر", "junk": true },
+    "/feed/": { "file": "junk.html", "title": "خوراک", "junk": true },
+    "/shop/page/3/": { "file": "junk.html", "title": "صفحه ۳", "junk": true },
+    "/wp-login.php": { "file": "junk.html", "title": "ورود", "junk": true }
+  },
+  "raw": {
+    "/robots.txt": "robots.txt",
+    "/sitemap_index.xml": "sitemap_index.xml",
+    "/page-sitemap.xml": "page-sitemap.xml",
+    "/product-sitemap.xml": "product-sitemap.xml",
+    "/post-sitemap.xml": "post-sitemap.xml",
+    "/post_tag-sitemap.xml": "post_tag-sitemap.xml"
+  }
+}

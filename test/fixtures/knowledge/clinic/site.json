@@ -1,0 +1,15 @@
+{
+  "origin": "https://labkhand-clinic.ir",
+  "layout": "_layout.html",
+  "pages": {
+    "/": { "file": "home.html", "title": "صفحه اصلی", "page": "Default.aspx" },
+    "/Default.aspx": { "file": "home.html", "title": "صفحه اصلی", "page": "Default.aspx" },
+    "/Services.aspx": { "file": "services.html", "title": "خدمات و تعرفه‌ها", "page": "Services.aspx" },
+    "/Doctors.aspx": { "file": "doctors.html", "title": "پزشکان", "page": "Doctors.aspx" },
+    "/Insurance.aspx": { "file": "insurance.html", "title": "بیمه", "page": "Insurance.aspx" },
+    "/Appointment.aspx": { "file": "appointment.html", "title": "نوبت‌دهی", "page": "Appointment.aspx" },
+    "/FAQ.aspx": { "file": "faq.html", "title": "پرسش‌های رایج", "page": "FAQ.aspx" },
+    "/Contact.aspx": { "file": "contact.html", "title": "تماس با ما", "page": "Contact.aspx" }
+  },
+  "raw": {}
+}
