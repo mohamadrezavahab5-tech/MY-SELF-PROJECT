@@ -1,0 +1,15 @@
+{
+  "name": "Pasokhyar",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "containerEnv": {
+    "ADMIN_PHONES": "09120000000"
+  },
+  "postCreateCommand": "npm ci && npm run seed",
+  "postAttachCommand": {
+    "site": "bash .devcontainer/start.sh"
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "Pasokhyar", "onAutoForward": "openBrowser" }
+  }
+}

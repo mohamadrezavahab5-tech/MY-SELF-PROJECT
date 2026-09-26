@@ -94,7 +94,11 @@ function sameOrigin(req, res, next) {
   if (origin && origin !== 'null') {
     let host = '';
     try { host = new URL(origin).host; } catch { /* fallthrough */ }
-    if (host && host !== req.headers.host) return res.status(403).send('bad origin');
+    // Behind a proxy that rewrites Host (e.g. a Codespaces forwarded port),
+    // the configured public SITE_URL is the other legitimate origin.
+    if (host && host !== req.headers.host && host !== new URL(config.siteUrl).host) {
+      return res.status(403).send('bad origin');
+    }
   }
   next();
 }
